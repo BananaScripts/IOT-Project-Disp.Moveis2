@@ -1,6 +1,11 @@
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const EtherApp());
 }
 
@@ -13,17 +18,45 @@ class EtherApp extends StatelessWidget {
       title: 'ETHER',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF121212),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(fontFamily: 'Roboto'),
-        ),
+        textTheme: const TextTheme(bodyLarge: TextStyle(fontFamily: 'Roboto')),
       ),
       home: const EtherHome(),
     );
   }
 }
 
-class EtherHome extends StatelessWidget {
+class EtherHome extends StatefulWidget {
   const EtherHome({super.key});
+
+  @override
+  _EtherHomeState createState() => _EtherHomeState();
+}
+
+class _EtherHomeState extends State<EtherHome> {
+  final DatabaseReference _databaseReference = FirebaseDatabase.instance.ref();
+  Map<String, dynamic> sensorData = {};
+  Map<String, dynamic> historicoData = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _databaseReference.child("sensor_gas").onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+      if (data != null) {
+        setState(() {
+          sensorData = Map<String, dynamic>.from(data);
+          historicoData = data['historico'] != null
+              ? Map<String, dynamic>.from(data['historico'])
+              : {};
+        });
+      } else {
+        setState(() {
+          sensorData = {};
+          historicoData = {};
+        });
+      }
+    });
+  }
 
   void _openSensorSidebar(BuildContext context) {
     showModalBottomSheet(
@@ -59,7 +92,7 @@ class EtherHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final buttonSize = size.width * 0.22; // Responsivo
+    final buttonSize = size.width * 0.22;
 
     return Scaffold(
       body: Container(
@@ -93,18 +126,48 @@ class EtherHome extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Container(
-                    height: size.height * 0.35,
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
-                    child: const Center(
-                      child: Text(
-                        'Informações sobre o gás aqui...',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 18,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Estado Digital: ${sensorData['estado_digital'] ?? 'N/A'}',
+                          style: const TextStyle(color: Colors.white, fontSize: 18),
                         ),
-                        textAlign: TextAlign.center,
-                      ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Valor Analógico: ${sensorData['valor_analogico'] ?? 'N/A'}',
+                          style: const TextStyle(color: Colors.white, fontSize: 18),
+                        ),
+                        const Divider(height: 30, color: Colors.white30),
+                        const Text(
+                          'Histórico',
+                          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 10),
+                        historicoData.isEmpty
+                            ? const Text('Nenhum histórico disponível.', style: TextStyle(color: Colors.white70))
+                            : SizedBox(
+                                height: 150,
+                                child: ListView(
+                                  children: historicoData.entries.map((entry) {
+                                    final ts = entry.key;
+                                    final item = entry.value as Map;
+                                    return ListTile(
+                                      title: Text(
+                                        '[$ts]',
+                                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                      ),
+                                      subtitle: Text(
+                                        'Digital: ${item['estado_digital'] ?? 'N/A'}  |  Analógico: ${item['valor_analogico'] ?? 'N/A'}',
+                                        style: const TextStyle(color: Colors.white),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                      ],
                     ),
                   ),
                 ),
@@ -173,7 +236,10 @@ class EtherHome extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
       ],
     );
   }
